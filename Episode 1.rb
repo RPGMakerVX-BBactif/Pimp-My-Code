@@ -51,24 +51,7 @@ module Wora_NSS Wora_NSS
   OPACITY_DEFAULT = true # This will use the default opacity for windows
                    # Please note that this will affect both opacitys below
   NSS_WINDOW_OPACITY = 255 # All windows' opacity (Lowest 0 - 255 Highest)
-  # You can change this to 0 in case you want to use image for background
-  NSS_IMAGE_BG = '' # Background image file name, it must be in folder Picture
-  #               use '' for no background
-  NSS_IMAGE_BG_OPACITY = 255 # Opacity for background image
- 
-  # If you use the screen shot method this does not matter
-  SWAP_TILE = false # Make this false if you don't use the swap_tile script
-  SWAP_TILE_SWITCH = 84 # The switch needs to be the same as your swap tile
-  #                  switch, but if SWAP_TILE is false it does not matter
- 
-  # If this is true it will screen shot the map, if false it will draw it
-  SCREENSHOT_IMAGE = true # Drawing the map is good because it doesn't require
-  # a .DLL or images for the screen shot, but it has sprites, tone, and
-  # weather. You need to turn on swap tile if you have this as false.
- 
-  IMAGE_FILETYPE = '.png' # Image type for screenshot
-  # '.bmp', or '.jpg', or '.png'
- 
+  
   # If this is true then the scene will not change when you save the game
   SCENE_CHANGE = true  # Changes Scene to map if true
 
@@ -122,31 +105,6 @@ module Wora_NSS Wora_NSS
   # END NEO SAVE SYSTEM - SETUP (Edit below at your own risk)
   #=========================================================================
  
-  #-------------------------------------------------------------
-  # Screenshot V2 by Andreas21 and Cybersam
-  #-------------------------------------------------------------
-  @screen = Win32API.new 'screenshot', 'Screenshot', %w(l l l l p l l), ''
-  @readini = Win32API.new 'kernel32', 'GetPrivateProfileStringA', %w(p p p p l p), 'l'
-  @findwindow = Win32API.new 'user32', 'FindWindowA', %w(p p), 'l'
-  module_function
-  def self.shot(file_name)
-   case IMAGE_FILETYPE
-   when '.bmp'; typid = 0
-   when '.jpg'; typid = 1
-   when '.png'; typid = 2
-   end
-   # Get Screenshot
-   filename = file_name + IMAGE_FILETYPE
-   @screen.call(0, 0, Graphics.width, Graphics.height, filename, self.handel,
-   typid)
-  end
-  def self.handel
-   game_name = "\0" * 256
-   @readini.call('Game','Title','',game_name,255,".\\Game.ini")
-   game_name.delete!("\0")
-   return @findwindow.call('RGSS Player',game_name)
-  end
- 
 end
 
 class Scene_File < Scene_Base
@@ -158,11 +116,6 @@ class Scene_File < Scene_Base
   def start
    super
    create_menu_background
-   if NSS_IMAGE_BG != ''
-     @bg = Sprite.new
-     @bg.bitmap = Cache.picture(NSS_IMAGE_BG)
-     @bg.opacity = NSS_IMAGE_BG_OPACITY
-   end
    @help_window = Window_Help.new
    command = []
    (1..MAX_SAVE_SLOT).each do |i|
@@ -268,17 +221,13 @@ class Scene_File < Scene_Base
   # * Execute Save
   #--------------------------------------------------------------------------
   def do_save
-   if SCREENSHOT_IMAGE
-   File.rename(SAVE_PATH + 'temp' + IMAGE_FILETYPE,
-   make_filename(@last_slot_index).gsub(/\..*$/){ '_ss' } + IMAGE_FILETYPE) 
-   end 
    file = File.open(make_filename(@last_slot_index), "wb")
    write_save_data(file)
    file.close   
    if SCENE_CHANGE
-   $scene = Scene_Map.new
+    $scene = Scene_Map.new
    else
-   $scene = Scene_File.new(true, false, false)
+    $scene = Scene_File.new(true, false, false)
    end
   end
   #--------------------------------------------------------------------------
@@ -337,6 +286,16 @@ class Scene_File < Scene_Base
    end
    return latest_index
   end
+  #--------------------------------------------------------------------------
+  # * Write Save Data
+  #     file : write file object (opened)
+  #--------------------------------------------------------------------------
+  alias old_write_save_data write_save_data
+  def write_save_data(file)
+    old_write_save_data(file)
+    Marshal.dump($game_temp.screenshot,         file)
+  end
+end
 
 class Window_SlotList < Window_Command
   #--------------------------------------------------------------------------
@@ -387,35 +346,17 @@ class Window_NSS_SlotDetail < Window_Base
    @bitmap_list = {}
    @map_name = []
   end
- 
-  def dispose
-   dispose_tilemap
-   super
-  end
 
   def draw_data(slot_id)
    contents.clear # 352, 328
-   dispose_tilemap
    load_save_data(slot_id) if @data[slot_id].nil?
    if @exist_list[slot_id]
-     save_data = @data[slot_id]
-     # DRAW SCREENSHOT
+    save_data = @data[slot_id]
+    # DRAW SCREENSHOT
     contents.fill_rect(0,30,352,160, MAP_BORDER)
-    if SCREENSHOT_IMAGE
-     if save_data['ss']
-      bitmap = get_bitmap(save_data['ss_path'])
-      rect = Rect.new((Graphics.width-348)/2,(Graphics.height-156)/2,348,156)
-      contents.blt(2,32,bitmap,rect)
-     end
-    else
-     if SWAP_TILE and $game_switches[SWAP_TILE_SWITCH]
-     create_swaptilemap(save_data['gamemap'].data, save_data['gamemap'].display_x,
-     save_data['gamemap'].display_y)
-     else
-     create_tilemap(save_data['gamemap'].data, save_data['gamemap'].display_x,
-     save_data['gamemap'].display_y)
-     end
-    end
+    bitmap = @data[slot_id]['screenshot']
+    rect = Rect.new((Graphics.width-348)/2,(Graphics.height-156)/2,348,156)
+    contents.blt(2,32,bitmap,rect)
      if DRAW_GOLD
       # DRAW GOLD
       gold_textsize = contents.text_size(save_data['gamepar'].gold).width
@@ -487,7 +428,7 @@ class Window_NSS_SlotDetail < Window_Base
    else
      contents.draw_text(0,0, contents.width, contents.height - WLH, EMPTY_SLOT_TEXT, 1)
    end
-  end
+ end
  
   def load_save_data(slot_id)
    file_name = make_filename(slot_id)
@@ -510,11 +451,9 @@ class Window_NSS_SlotDetail < Window_Base
      @data[slot_id]['gamepar'] = Marshal.load(file)
      @data[slot_id]['gametro'] = Marshal.load(file)
      @data[slot_id]['gamemap'] = Marshal.load(file)
+     @data[slot_id]['player'] = Marshal.load(file)
+     @data[slot_id]['screenshot'] = Marshal.load(file)
      @data[slot_id]['total_sec'] = @data[slot_id]['frame'] / Graphics.frame_rate
-     if SCREENSHOT_IMAGE
-     @data[slot_id]['ss_path'] = file_name.gsub(/\..*$/){'_ss'} + IMAGE_FILETYPE
-     @data[slot_id]['ss'] = FileTest.exist?(@data[slot_id]['ss_path'])
-     end
      @data[slot_id]['map_name'] = get_mapname(@data[slot_id]['gamemap'].map_id)
      file.close
    else
@@ -533,13 +472,6 @@ class Window_NSS_SlotDetail < Window_Base
    return @exist_list[slot_id]
   end
  
-  def get_bitmap(path)
-   if !@bitmap_list.include?(path)
-     @bitmap_list[path] = Bitmap.new(path)
-   end
-  return @bitmap_list[path]
-  end
- 
  def get_mapname(map_id)
    if @map_data.nil?
      @map_data = load_data("Data/MapInfos.rvdata")
@@ -556,107 +488,8 @@ class Window_NSS_SlotDetail < Window_Base
     end
    end
    return @map_name[map_id]
- end 
+ end
  
-  def create_tilemap(map_data, ox, oy)
-   @viewport = Viewport.new(self.x + 2 + 16, self.y + 32 + 16, 348,156)
-   @viewport.z = self.z
-   @tilemap = Tilemap.new(@viewport)
-   @tilemap.bitmaps[0] = Cache.system("TileA1")
-   @tilemap.bitmaps[1] = Cache.system("TileA2")
-   @tilemap.bitmaps[2] = Cache.system("TileA3")
-   @tilemap.bitmaps[3] = Cache.system("TileA4")
-   @tilemap.bitmaps[4] = Cache.system("TileA5")
-   @tilemap.bitmaps[5] = Cache.system("TileB")
-   @tilemap.bitmaps[6] = Cache.system("TileC")
-   @tilemap.bitmaps[7] = Cache.system("TileD")
-   @tilemap.bitmaps[8] = Cache.system("TileE")
-   @tilemap.map_data = map_data
-   @tilemap.ox = ox / 8 + 99
-   @tilemap.oy = oy / 8 + 90
-  end
- 
-   def create_swaptilemap(map_data, ox, oy)
-   @viewport = Viewport.new(self.x + 2 + 16, self.y + 32 + 16, 348,156)
-   @viewport.z = self.z
-   @tilemap = Tilemap.new(@viewport)
-   
-   tile1 = Cache_Swap_Tiles.swap($tileA1 + ".png") rescue nil
-   tile2 = Cache_Swap_Tiles.swap($tileA2 + ".png") rescue nil
-   tile3 = Cache_Swap_Tiles.swap($tileA3 + ".png") rescue nil
-   tile4 = Cache_Swap_Tiles.swap($tileA4 + ".png") rescue nil
-   tile5 = Cache_Swap_Tiles.swap($tileA5 + ".png") rescue nil
-   tile6 = Cache_Swap_Tiles.swap($tileB + ".png") rescue nil
-   tile7 = Cache_Swap_Tiles.swap($tileC + ".png") rescue nil
-   tile8 = Cache_Swap_Tiles.swap($tileD + ".png") rescue nil
-   tile9 = Cache_Swap_Tiles.swap($tileE + ".png") rescue nil
-   
-if $tileA1 != nil
-@tilemap.bitmaps[0] = tile1
-else
-@tilemap.bitmaps[0] = Cache.system("TileA1")
-end
-
-if $tileA2 != nil
-@tilemap.bitmaps[1] = tile2
-else
-@tilemap.bitmaps[1] = Cache.system("TileA2")
-end
-
-if $tileA3 != nil
-@tilemap.bitmaps[2] = tile3 
-else
-@tilemap.bitmaps[2] = Cache.system("TileA3")
-end 
-
-if $tileA4 != nil
-@tilemap.bitmaps[3] = tile4
-else
-@tilemap.bitmaps[3] = Cache.system("TileA4")
-end
-
-if $tileA5 != nil
-@tilemap.bitmaps[4] = tile5 
-else
-@tilemap.bitmaps[4] = Cache.system("TileA5")
-end
-
-if $tileB != nil
-@tilemap.bitmaps[5] = tile6
-else
-@tilemap.bitmaps[5] = Cache.system("TileB") 
-end 
-
-if $tileC != nil
-@tilemap.bitmaps[6] = tile7
-else
-@tilemap.bitmaps[6] = Cache.system("TileC")
-end 
-
-if $tileD != nil
-@tilemap.bitmaps[7] = tile8
-else
-@tilemap.bitmaps[7] = Cache.system("TileD") 
-end
-
-if $tileE != nil
-@tilemap.bitmaps[8] = tile9
-else
-@tilemap.bitmaps[8] = Cache.system("TileE") 
-end
- 
-   @tilemap.map_data = map_data
-   @tilemap.ox = ox / 8 + 99
-   @tilemap.oy = oy / 8 + 90
-end
- 
-  def dispose_tilemap
-   unless @tilemap.nil?
-     @tilemap.dispose
-     @tilemap = nil
-   end
-  end
-end
 end
 
 class Scene_Title < Scene_Base
@@ -666,55 +499,17 @@ class Scene_Title < Scene_Base
   end
 end
 
-class Scene_Map < Scene_Base
-  alias wora_nss_scemap_ter terminate
-  def terminate
-   Wora_NSS.shot(Wora_NSS::SAVE_PATH + 'temp')
-   wora_nss_scemap_ter
-  end
-end
-#======================================================================
-# END - NEO SAVE SYSTEM by Woratana
-#======================================================================
 #==============================================================================
-# ** DataManager
+# ** Marshal implementations in Font & Bitmap.
 #------------------------------------------------------------------------------
-#  Modification de init
-#==============================================================================
-
-module DataManager
-  class << self
-    #--------------------------------------------------------------------------
-    # * alias
-    #--------------------------------------------------------------------------
-    alias picture_manager_init init
-    #--------------------------------------------------------------------------
-    # * Initialisation
-    #--------------------------------------------------------------------------
-    def init
-      save_data([], "Data/Save_Bitmap.rvdata2") if $TEST and !File.exists?("Data/Save_Bitmap.rvdata2")
-      picture_manager_init
-    end
-  end
-end
-
-#==============================================================================
-# ** Font
-#------------------------------------------------------------------------------
-#  Ajout de Marshall dump et load
-#  Ecrit par Yeyinde
+#  Writed by Yeyinde
+#  Improved by Grim (FunkyWork)
 #==============================================================================
 class Font
   def marshal_dump;end
   def marshal_load(obj);end
 end
-#==============================================================================
-# ** Bitmap
-#------------------------------------------------------------------------------
-#  Ajout de Marshall dump et load
-#  Ecrit par Yeyinde
-#==============================================================================
-
+  
 class Bitmap
   #--------------------------------------------------------------------------
   # * Win32API
@@ -755,61 +550,53 @@ class Bitmap
 end
 
 #==============================================================================
-# ** Screenshot_Manager
+# ** Scene_Map
 #------------------------------------------------------------------------------
-#  API de capture d'écran
+#  Added, make snapshot in pre_terminate
 #==============================================================================
-
-module Picture_Manager
-
-  #==============================================================================
-  # ** Saved_Bitmap
-  #------------------------------------------------------------------------------
-  #  Décris une image
-  #==============================================================================
-
-  class Saved_Bitmap
-    #--------------------------------------------------------------------------
-    # * Variables d'instances
-    #--------------------------------------------------------------------------
-    attr_accessor :bitmap, :name
-    #--------------------------------------------------------------------------
-    # * Constructeur
-    #--------------------------------------------------------------------------
-    def initialize(name, bitmap)
-    @name, @bitmap = name, bitmap
-    end
-  end
-
+class Scene_Map < Scene_Base
   #--------------------------------------------------------------------------
-  # * Singleton
+  # * Pre-termination Processing
   #--------------------------------------------------------------------------
-  extend self
-
-  #--------------------------------------------------------------------------
-  # * Crée une capture d'écran
-  #--------------------------------------------------------------------------
-  def shot(name)
-    return Saved_Bitmap.new(name, Graphics.snap_to_bitmap)
-  end
-  #--------------------------------------------------------------------------
-  # * Sauve une image
-  #--------------------------------------------------------------------------
-  def save(saved_bitmap)
-    unless saved_bitmap.is_a?(Saved_Bitmap)
-      raise RuntimeError.new("Le fichier doit être une Saved_Bitmap") 
-    end
-    bmp_list = load_data("Data/Save_Bitmap.rvdata2")
-    bmp_list ||= []
-    bmp_list << saved_bitmap
-    save_data(bmp_list, "Data/Save_Bitmap.rvdata2")
-  end
-  #--------------------------------------------------------------------------
-  # * Retrouve une image
-  #--------------------------------------------------------------------------
-  def find(name)
-    bmp_list = load_data("Data/Save_Bitmap.rvdata2")
-    picture = bmp_list.find{|bmp| bmp.name == name}
-    return picture.bitmap
+  alias old_pre_terminate pre_terminate
+  def pre_terminate
+    old_pre_terminate
+    make_snapshot
   end
 end
+
+#==============================================================================
+# ** Scene_Base
+#------------------------------------------------------------------------------
+#  Added, make snapshot
+#==============================================================================
+class Scene_Base
+  #--------------------------------------------------------------------------
+  # * Pre-termination Processing
+  #--------------------------------------------------------------------------
+  def make_snapshot
+    $game_temp.screenshot = Graphics.snap_to_bitmap
+  end
+end
+
+#==============================================================================
+# ** Game_Temp
+#------------------------------------------------------------------------------
+#  This class handles temporary data that is not included with save data.
+# The instance of this class is referenced by $game_temp.
+#==============================================================================
+class Game_Temp
+  #--------------------------------------------------------------------------
+  # * Public Instance Variables
+  #--------------------------------------------------------------------------
+  attr_accessor :screenshot        # background bitmap
+  #--------------------------------------------------------------------------
+  # * Object Initialization
+  #--------------------------------------------------------------------------
+  alias old_initialize initialize
+  def initialize
+    old_initialize
+    @screenshot = Bitmap.new(1,1)
+  end
+end
+  
