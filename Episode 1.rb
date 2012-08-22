@@ -1,50 +1,24 @@
 #==========================================================================
 # â— [VX] â—¦ Neo Save System V â—¦ â–¡
 #---------------------------------------------------------------------------
-# â—¦ Author: Woratana [woratana@hotmail.com]
+# â—¦ Author: Woratana [woratana@hotmail.com], Zangther, Grim
 # â—¦ Thaiware RPG Maker Community
+#     http://rpg-maker-vx.bbactif.com/ and http://funkywork.blogspot.com
 # â—¦ Last Updated:
-# â—¦ Version: 3.0 -> 5.0
-# â—¦ Continued support by Helladen
-# â—¦ (Screen Shot credit Wortana, Andreas21, and Cybersam)
+# â—¦ Version: BBActif
+
 #---------------------------------------------------------------------------
-# â—¦ Log V:
-# - Screenshot support for those who want tone/weather/sprites and
-#   unlike NSS 1.0 the screen is now centered.
-# - Added an option to stay in save screen after you save the game
-#---------------------------------------------------------------------------
-# â—¦ Log IV:
-# - New addition for hiding map names. You can control the switch to
-#   allow MAP_NO_NAME_LIST to work or not.
-# - Revised some of the settings and script organization.
-# - Added an option to disable the vocab::Gold text right of the number.
-# - Added an option to use default opacity or not.
-# - Swap tile compatibility support.
-#---------------------------------------------------------------------------
-# â—¦ Log III:
-# - Change back to draw tile map as screenshot. Don't need any image.
-# - For drawing tile map, the characters won't show on the tile map.
-#---------------------------------------------------------------------------
-# â—¦ Log II:
-# - Screenshot DLL is not work with Vista Aero, so I remove it
-#   and use image for each map instead of screenshot.
-# - Actor's level in last version (V.1) is incorrect.
-#---------------------------------------------------------------------------
-# â—¦ Features:
-# - Unlimited save slots, you can choose max save slot
-# - Many configuration options
-# - Swap tile support
-# - You can use image for scene's background
-# - Choose your save file's name, and folder to store save files
-# - Choose to show only information you want
-# - Editable text for information's title
-# - Draw tile map for map that player is currently on.
-# - Remove text you don't want from map's name (e.g. tags for special script)
-# - Choose map that you don't want to show the name on
-# - Include save confirmation window before overwrite old save
+# â—¦ Log 1:
+# No DLL required (New Version)
 #===========================================================================
 
-module Wora_NSS Wora_NSS
+#==============================================================================
+# ** Wora_NSS
+#------------------------------------------------------------------------------
+#  Configruation
+#==============================================================================
+
+module Wora_NSS
   #==========================================================================
   # * START NEO SAVE SYSTEM - SETUP
   #--------------------------------------------------------------------------
@@ -107,195 +81,217 @@ module Wora_NSS Wora_NSS
  
 end
 
-class Scene_File < Scene_Base
+#==============================================================================
+# ** Scene_File
+#------------------------------------------------------------------------------
+#  This class performs common processing for the save screen and load screen.
+#==============================================================================
+
+class Scene_File
+  #-------------------------------------------------------------------------
+  # * Dependancy
+  #-------------------------------------------------------------------------
   include Wora_NSS
+  #-------------------------------------------------------------------------
+  # * Public instance variable
+  #-------------------------------------------------------------------------
   attr_reader :window_slotdetail
+  #-------------------------------------------------------------------------
+  # * Alias
+  #-------------------------------------------------------------------------
+  alias old_write_save_data write_save_data
   #-------------------------------------------------------------------------
   # * Start processing
   #-------------------------------------------------------------------------
   def start
-   super
-   create_menu_background
-   @help_window = Window_Help.new
-   command = []
-   (1..MAX_SAVE_SLOT).each do |i|
-     command << SLOT_NAME.clone.gsub!(/\{ID\}/i) { i.to_s }
-   end
-   @window_slotdetail = Window_NSS_SlotDetail.new
-   @window_slotlist = Window_SlotList.new(160, command)
-   @window_slotlist.y = @help_window.height
-   @window_slotlist.height = Graphics.height - @help_window.height
-   if OPACITY_DEFAULT == false
-   @help_window.opacity = NSS_WINDOW_OPACITY
-   @window_slotdetail.opacity = @window_slotlist.opacity = NSS_WINDOW_OPACITY
-   end
-
-  # Create Folder for Save file
-  if SAVE_PATH != ''
-   Dir.mkdir(SAVE_PATH) if !FileTest.directory?(SAVE_PATH)
-  end
-   if @saving
-     @index = $game_temp.last_file_index
-     @help_window.set_text(Vocab::SaveMessage)
-   else
-     @index = self.latest_file_index
-     @help_window.set_text(Vocab::LoadMessage)
-     (1..MAX_SAVE_SLOT).each do |i|
-      @window_slotlist.draw_item(i-1, false) if !@window_slotdetail.file_exist?(i)
+    super
+    create_menu_background
+    @help_window = Window_Help.new
+    command = []
+    (1..MAX_SAVE_SLOT).each do |i|
+      command << SLOT_NAME.clone.gsub!(/\{ID\}/i) { i.to_s }
     end
-   end
-   @window_slotlist.index = @index
-   # Draw Information
-   @last_slot_index = @window_slotlist.index
-   @window_slotdetail.draw_data(@last_slot_index + 1)
+    @window_slotdetail = Window_NSS_SlotDetail.new
+    @window_slotlist = Window_SlotList.new(160, command)
+    @window_slotlist.y = @help_window.height
+    @window_slotlist.height = Graphics.height - @help_window.height
+    unless OPACITY_DEFAULT
+      @help_window.opacity = NSS_WINDOW_OPACITY
+      @window_slotdetail.opacity = @window_slotlist.opacity = NSS_WINDOW_OPACITY
+    end
+
+    # Create Folder for Save file
+    if SAVE_PATH != ''
+      Dir.mkdir(SAVE_PATH) if !FileTest.directory?(SAVE_PATH)
+    end
+    if @saving
+      @index = $game_temp.last_file_index
+      @help_window.set_text(Vocab::SaveMessage)
+    else
+      @index = self.latest_file_index
+      @help_window.set_text(Vocab::LoadMessage)
+      (1..MAX_SAVE_SLOT).each do |i|
+        @window_slotlist.draw_item(i-1, false) if !@window_slotdetail.file_exist?(i)
+      end
+    end
+    @window_slotlist.index = @index
+    # Draw Information
+    @last_slot_index = @window_slotlist.index
+    @window_slotdetail.draw_data(@last_slot_index + 1)
   end
   #-------------------------------------------------------------------------- 
   # * Termination Processing
   #--------------------------------------------------------------------------
   def terminate
-   super
-   dispose_menu_background
-   unless @bg.nil?
-     @bg.bitmap.dispose
-     @bg.dispose
-   end
-   @window_slotlist.dispose
-   @window_slotdetail.dispose
-   @help_window.dispose
+    super
+    dispose_menu_background
+    if @bg
+      @bg.bitmap.dispose
+      @bg.dispose
+    end
+    @window_slotlist.dispose
+    @window_slotdetail.dispose
+    @help_window.dispose
   end
   #--------------------------------------------------------------------------
   # * Frame Update
   #--------------------------------------------------------------------------
   def update
-   super
-   if !@confirm_window.nil?
-     @confirm_window.update
-     if Input.trigger?(Input::C)
-      if @confirm_window.index == 0
-        determine_savefile
-        @confirm_window.dispose
-        @confirm_window = nil
-      else
-        Sound.play_cancel
-        @confirm_window.dispose
-        @confirm_window = nil
+    super
+    if @confirm_window
+      @confirm_window.update
+      if Input.trigger?(Input::C)
+        if @confirm_window.index == 0
+          determine_savefile
+          @confirm_window.dispose
+          @confirm_window = nil
+        else
+          Sound.play_cancel
+          @confirm_window.dispose
+          @confirm_window = nil
+        end
+      elsif Input.trigger?(Input::B)
+      Sound.play_cancel
+      @confirm_window.dispose
+      @confirm_window = nil
       end
-     elsif Input.trigger?(Input::B)
-     Sound.play_cancel
-     @confirm_window.dispose
-     @confirm_window = nil
-     end
-   else
-     update_menu_background
-     @window_slotlist.update
-     if @window_slotlist.index != @last_slot_index
-      @last_slot_index = @window_slotlist.index
-      @window_slotdetail.draw_data(@last_slot_index + 1)
-     end
-     @help_window.update
-     update_savefile_selection
-   end
+    else
+      update_menu_background
+      @window_slotlist.update
+      if @window_slotlist.index != @last_slot_index
+        @last_slot_index = @window_slotlist.index
+        @window_slotdetail.draw_data(@last_slot_index + 1)
+      end
+      @help_window.update
+      update_savefile_selection
+    end
   end
   #--------------------------------------------------------------------------
   # * Update Save File Selection
   #--------------------------------------------------------------------------
   def update_savefile_selection
-   if Input.trigger?(Input::C)
-     if @saving and @window_slotdetail.file_exist?(@last_slot_index + 1)
-      Sound.play_decision
-      text1 = SFC_Text_Confirm
-      text2 = SFC_Text_Cancel
-      @confirm_window = Window_Command.new(SFC_Window_Width,[text1,text2])
-      @confirm_window.x = ((544 - @confirm_window.width) / 2) + SFC_Window_X_Offset
-      @confirm_window.y = ((416 - @confirm_window.height) / 2) + SFC_Window_Y_Offset
-     else
-      determine_savefile
-     end
-   elsif Input.trigger?(Input::B)
-     Sound.play_cancel
-     return_scene
-   end
+    if Input.trigger?(Input::C)
+      if @saving and @window_slotdetail.file_exist?(@last_slot_index + 1)
+        Sound.play_decision
+        text1 = SFC_Text_Confirm
+        text2 = SFC_Text_Cancel
+        @confirm_window = Window_Command.new(SFC_Window_Width,[text1,text2])
+        @confirm_window.x = ((544 - @confirm_window.width) / 2) + SFC_Window_X_Offset
+        @confirm_window.y = ((416 - @confirm_window.height) / 2) + SFC_Window_Y_Offset
+      else
+        determine_savefile
+      end
+    elsif Input.trigger?(Input::B)
+      Sound.play_cancel
+      return_scene
+    end
   end
  
   #--------------------------------------------------------------------------
   # * Execute Save
   #--------------------------------------------------------------------------
   def do_save
-   file = File.open(make_filename(@last_slot_index), "wb")
-   write_save_data(file)
-   file.close   
-   if SCENE_CHANGE
-    $scene = Scene_Map.new
-   else
-    $scene = Scene_File.new(true, false, false)
-   end
+    file = File.open(make_filename(@last_slot_index), "wb")
+    write_save_data(file)
+    file.close   
+    if SCENE_CHANGE
+      $scene = Scene_Map.new
+    else
+      $scene = Scene_File.new(true, false, false)
+    end
   end
   #--------------------------------------------------------------------------
   # * Execute Load
   #--------------------------------------------------------------------------
   def do_load
-   file = File.open(make_filename(@last_slot_index), "rb")
-   read_save_data(file)
-   file.close
-   $scene = Scene_Map.new
-   RPG::BGM.fade(1500)
-   Graphics.fadeout(60)
-   Graphics.wait(40)
-   @last_bgm.play
-   @last_bgs.play
+    file = File.open(make_filename(@last_slot_index), "rb")
+    read_save_data(file)
+    file.close
+    $scene = Scene_Map.new
+    RPG::BGM.fade(1500)
+    Graphics.fadeout(60)
+    Graphics.wait(40)
+    @last_bgm.play
+    @last_bgs.play
   end
   #--------------------------------------------------------------------------
   # * Confirm Save File
   #--------------------------------------------------------------------------
   def determine_savefile
-   if @saving
-     Sound.play_save
-     do_save
-   else
-     if @window_slotdetail.file_exist?(@last_slot_index + 1)
-      Sound.play_load
-      do_load
-     else
-      Sound.play_buzzer
-      return
-     end
-   end
-   $game_temp.last_file_index = @last_slot_index
+    if @saving
+      Sound.play_save
+      do_save
+    else
+      if @window_slotdetail.file_exist?(@last_slot_index + 1)
+        Sound.play_load
+        do_load
+      else
+        Sound.play_buzzer
+        return
+      end
+    end
+    $game_temp.last_file_index = @last_slot_index
   end
   #--------------------------------------------------------------------------
   # * Create Filename
   #    file_index : save file index (0-3)
   #--------------------------------------------------------------------------
   def make_filename(file_index)
-   return SAVE_PATH + SAVE_FILE_NAME.gsub(/\{ID\}/i) { (file_index + 1).to_s }
+    return SAVE_PATH + SAVE_FILE_NAME.gsub(/\{ID\}/i) { (file_index + 1).to_s }
   end
   #--------------------------------------------------------------------------
   # * Select File With Newest Timestamp
   #--------------------------------------------------------------------------
   def latest_file_index
-   latest_index = 0
-   latest_time = Time.at(0)
-   (1..MAX_SAVE_SLOT).each do |i|
-     file_name = make_filename(i - 1)
-     next if !@window_slotdetail.file_exist?(i)
-     file_time = File.mtime(file_name)
-     if file_time > latest_time
-      latest_time = file_time
-      latest_index = i - 1
-     end
-   end
-   return latest_index
+    latest_index = 0
+    latest_time = Time.at(0)
+    (1..MAX_SAVE_SLOT).each do |i|
+      file_name = make_filename(i - 1)
+      next if !@window_slotdetail.file_exist?(i)
+      file_time = File.mtime(file_name)
+      if file_time > latest_time
+        latest_time = file_time
+        latest_index = i - 1
+      end
+    end
+    return latest_index
   end
   #--------------------------------------------------------------------------
   # * Write Save Data
   #     file : write file object (opened)
   #--------------------------------------------------------------------------
-  alias old_write_save_data write_save_data
   def write_save_data(file)
     old_write_save_data(file)
     Marshal.dump($game_temp.screenshot,         file)
   end
 end
+
+
+#==============================================================================
+# ** Window_SlotList
+#------------------------------------------------------------------------------
+#  Define a Save Slot List
+#==============================================================================
 
 class Window_SlotList < Window_Command
   #--------------------------------------------------------------------------
@@ -312,7 +308,7 @@ class Window_SlotList < Window_Command
    else
      icon_index = Wora_NSS::EMPTY_SLOT_ICON
    end
-   if !icon_index.nil?
+   if icon_index
      rect.x -= 4
      draw_icon(icon_index, rect.x, rect.y, enabled) # Draw Icon
      rect.x += 26
@@ -323,13 +319,17 @@ class Window_SlotList < Window_Command
    self.contents.font.color.alpha = enabled ? 255 : 128
    self.contents.draw_text(rect, @commands[index])
   end
- 
+  #--------------------------------------------------------------------------
+  # * Move Cursor Down
+  #--------------------------------------------------------------------------
   def cursor_down(wrap = false)
    if @index < @item_max - 1 or wrap
      @index = (@index + 1) % @item_max
    end
   end
-
+  #--------------------------------------------------------------------------
+  # * Move Cursor up
+  #--------------------------------------------------------------------------
   def cursor_up(wrap = false)
    if @index > 0 or wrap
      @index = (@index - 1 + @item_max) % @item_max
@@ -337,8 +337,20 @@ class Window_SlotList < Window_Command
   end
 end
 
+#==============================================================================
+# ** Window_SlotList
+#------------------------------------------------------------------------------
+#  Define a Save Slot detail 
+#==============================================================================
+
 class Window_NSS_SlotDetail < Window_Base
+  #-------------------------------------------------------------------------
+  # * Dependancy
+  #-------------------------------------------------------------------------
   include Wora_NSS
+  #-------------------------------------------------------------------------
+  # * Object initialisation
+  #-------------------------------------------------------------------------
   def initialize
    super(160, 56, 384, 360)
    @data = []
@@ -346,10 +358,12 @@ class Window_NSS_SlotDetail < Window_Base
    @bitmap_list = {}
    @map_name = []
   end
-
+  #-------------------------------------------------------------------------
+  # * Draw data in a slot
+  #-------------------------------------------------------------------------
   def draw_data(slot_id)
    contents.clear # 352, 328
-   load_save_data(slot_id) if @data[slot_id].nil?
+   load_save_data(slot_id) unless @data[slot_id]
    if @exist_list[slot_id]
     save_data = @data[slot_id]
     # DRAW SCREENSHOT
@@ -365,11 +379,11 @@ class Window_NSS_SlotDetail < Window_Base
       contents.draw_text(0, 0, goldt_textsize, WLH, GOLD_TEXT)
       contents.font.color = normal_color
       contents.draw_text(goldt_textsize, 0, gold_textsize, WLH, save_data['gamepar'].gold) 
-      if DRAW_TEXT_GOLD == false
-      gold_textsize = 0
-      goldt_textsize = 0   
+      unless DRAW_TEXT_GOLD
+        gold_textsize = 0
+        goldt_textsize = 0   
       else
-      contents.draw_text(goldt_textsize + gold_textsize, 0, 200, WLH, Vocab::gold)
+        contents.draw_text(goldt_textsize + gold_textsize, 0, 200, WLH, Vocab::gold)
       end
      end
      if DRAW_PLAYTIME
@@ -428,8 +442,10 @@ class Window_NSS_SlotDetail < Window_Base
    else
      contents.draw_text(0,0, contents.width, contents.height - WLH, EMPTY_SLOT_TEXT, 1)
    end
- end
- 
+  end
+  #-------------------------------------------------------------------------
+  # * Load data on a slot
+  #-------------------------------------------------------------------------
   def load_save_data(slot_id)
    file_name = make_filename(slot_id)
    if file_exist?(slot_id) or FileTest.exist?(file_name)
@@ -461,38 +477,52 @@ class Window_NSS_SlotDetail < Window_Base
      @data[slot_id] = -1
    end
   end
-
+  #-------------------------------------------------------------------------
+  # * Define a file name
+  #-------------------------------------------------------------------------
   def make_filename(file_index)
    return SAVE_PATH + SAVE_FILE_NAME.gsub(/\{ID\}/i) { (file_index).to_s }
   end
- 
+  #-------------------------------------------------------------------------
+  # * Check file existence
+  #-------------------------------------------------------------------------
   def file_exist?(slot_id)
-   return @exist_list[slot_id] if !@exist_list[slot_id].nil?
-   @exist_list[slot_id] = FileTest.exist?(make_filename(slot_id))
+    @exist_list[slot_id] ||= FileTest.exist?(make_filename(slot_id))
    return @exist_list[slot_id]
   end
- 
- def get_mapname(map_id)
-   if @map_data.nil?
-     @map_data = load_data("Data/MapInfos.rvdata")
-   end
-   if @map_name[map_id].nil?
-    if MAP_NO_NAME_LIST.include?(map_id) and $game_switches[MAP_NO_NAME_SWITCH]
-      @map_name[map_id] = MAP_NO_NAME
-    else
-      @map_name[map_id] = @map_data[map_id].name
-    end 
-      MAP_NAME_TEXT_SUB.each_index do |i|
-      @map_name[map_id].sub!(MAP_NAME_TEXT_SUB[i], '')
-      @mapname = @map_name[map_id]
+  #-------------------------------------------------------------------------
+  # * Get the Map name
+  #-------------------------------------------------------------------------
+  def get_mapname(map_id)
+    unless @map_data
+      @map_data = load_data("Data/MapInfos.rvdata")
     end
-   end
-   return @map_name[map_id]
- end
+    unless @map_name[map_id]
+      if MAP_NO_NAME_LIST.include?(map_id) and $game_switches[MAP_NO_NAME_SWITCH]
+        @map_name[map_id] = MAP_NO_NAME
+      else
+        @map_name[map_id] = @map_data[map_id].name
+      end 
+      MAP_NAME_TEXT_SUB.each_index do |i|
+        @map_name[map_id].sub!(MAP_NAME_TEXT_SUB[i], '')
+        @mapname = @map_name[map_id]
+      end
+    end
+    return @map_name[map_id]
+  end
  
 end
 
-class Scene_Title < Scene_Base
+#==============================================================================
+# ** Scene_Title
+#------------------------------------------------------------------------------
+#  This class performs the title screen processing.
+#==============================================================================
+
+class Scene_Title
+  #-------------------------------------------------------------------------
+  # * Check "continue" state
+  #-------------------------------------------------------------------------
   def check_continue
    file_name = Wora_NSS::SAVE_PATH + Wora_NSS::SAVE_FILE_NAME.gsub(/\{ID\}/i) { '*' }
    @continue_enabled = (Dir.glob(file_name).size > 0)
@@ -554,11 +584,14 @@ end
 #------------------------------------------------------------------------------
 #  Added, make snapshot in pre_terminate
 #==============================================================================
-class Scene_Map < Scene_Base
+class Scene_Map
+  #--------------------------------------------------------------------------
+  # * Alias
+  #--------------------------------------------------------------------------
+  alias old_pre_terminate pre_terminate
   #--------------------------------------------------------------------------
   # * Pre-termination Processing
   #--------------------------------------------------------------------------
-  alias old_pre_terminate pre_terminate
   def pre_terminate
     old_pre_terminate
     make_snapshot
@@ -587,16 +620,18 @@ end
 #==============================================================================
 class Game_Temp
   #--------------------------------------------------------------------------
+  # * Alias
+  #--------------------------------------------------------------------------
+  alias old_initialize initialize
+  #--------------------------------------------------------------------------
   # * Public Instance Variables
   #--------------------------------------------------------------------------
   attr_accessor :screenshot        # background bitmap
   #--------------------------------------------------------------------------
   # * Object Initialization
   #--------------------------------------------------------------------------
-  alias old_initialize initialize
   def initialize
     old_initialize
     @screenshot = Bitmap.new(1,1)
   end
 end
-  
